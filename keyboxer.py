@@ -33,42 +33,50 @@ headers = {
 per_page = 100
 
 save = Path(__file__).resolve().parent / "keys"
+cache_file = Path(__file__).resolve().parent / "cache.txt"
+cached_urls = open(cache_file,"r").readlines()
 
 # Function to fetch and print search results
 def fetch_and_process_results(page):
+    global cached_urls
     params = {
         "per_page": per_page,
         "page": page
     }
-    response = requests.get(search_url, headers=headers, params=params)
-    if response.status_code == 200:
-        search_results = response.json()
-        if 'items' in search_results:
-            for item in search_results['items']:
-                file_name = item['name']
-                # Process only XML files
-                if file_name.lower().endswith('.xml'):
-                    raw_url = item['html_url'].replace('github.com', 'raw.githubusercontent.com').replace('/blob/', '/')
-                    # Fetch the file content
-                    file_content = fetch_file_content(raw_url)
-                    # Parse the XML
-                    try:
-                        root = etree.fromstring(file_content)
-                    except etree.XMLSyntaxError:
-                        continue
-                    # Get the canonical form (C14N)
-                    canonical_xml = etree.tostring(root, method="c14n")
-                    # Hash the canonical XML
-                    hash_value = hashlib.sha256(canonical_xml).hexdigest()
-                    file_name_save = save / (hash_value + ".xml")
-                    if not file_name_save.exists() and file_content and CheckValid(file_content):
-                        print(f"{raw_url} is new")
-                        with open( file_name_save, "w") as f:
-                            f.write(file_content)
-        return len(search_results['items']) > 0  # Return True if there could be more results
-    else:
+    response = session.get(search_url, headers=headers, params=params)
+    if response.status_code != 200:
         print(f"Failed to retrieve search results: {response.status_code}")
         return False
+    search_results = response.json()
+    if 'items' in search_results:
+        for item in search_results['items']:
+            file_name = item['name']
+            # Process only XML files
+            if file_name.lower().endswith('.xml'):
+                raw_url:str = item['html_url'].replace('github.com', 'raw.githubusercontent.com').replace('/blob/', '/')
+                # check if the file exists in cache
+                if raw_url + "\n" in cached_urls:
+                    continue
+                else:
+                    cached_urls.append(raw_url +"\n")
+                # Fetch the file content
+                file_content = fetch_file_content(raw_url)
+                # Parse the XML
+                try:
+                    root = etree.fromstring(file_content)
+                except etree.XMLSyntaxError:
+                    continue
+                # Get the canonical form (C14N)
+                canonical_xml = etree.tostring(root, method="c14n")
+                # Hash the canonical XML
+                hash_value = hashlib.sha256(canonical_xml).hexdigest()
+                file_name_save = save / (hash_value + ".xml")
+                if not file_name_save.exists() and file_content and CheckValid(file_content):
+                    print(f"{raw_url} is new")
+                    with open( file_name_save, "w") as f:
+                        f.write(file_content)
+    return len(search_results['items']) > 0  # Return True if there could be more results
+
 
 # Function to fetch file content
 def fetch_file_content(url:str):
@@ -85,6 +93,9 @@ has_more = True
 while has_more:
     has_more = fetch_and_process_results(page)
     page += 1
+
+# update cache
+open(cache_file,"w").writelines(cached_urls)
 
 for file_path in save.glob("*.xml"):
     file_content = file_path.read_text()  # Read file content as a string
