@@ -6,6 +6,7 @@ import os
 
 from check import keybox_check as CheckValid
 import hashlib
+
 hash = hashlib.sha256
 session = requests.Session()
 
@@ -20,45 +21,39 @@ if not GITHUB_TOKEN:
 
 # Search query
 search_query = "<AndroidAttestation>"
-search_type = "code"
 search_url = f"https://api.github.com/search/code?q={search_query}"
 
 # Headers for the API request
 headers = {
-	"Authorization": f"token {GITHUB_TOKEN}",
-	"Accept": "application/vnd.github.v3+json"
+    "Authorization": f"token {GITHUB_TOKEN}",
+    "Accept": "application/vnd.github.v3+json",
 }
-
-# Pagination parameters
-per_page = 100
 
 save = Path(__file__).resolve().parent / "keys"
 cache_file = Path(__file__).resolve().parent / "cache.txt"
-cached_urls = open(cache_file,"r").readlines()
+cached_urls = open(cache_file, "r").readlines()
+
 
 # Function to fetch and print search results
 def fetch_and_process_results(page):
-    global cached_urls
-    params = {
-        "per_page": per_page,
-        "page": page
-    }
+    params = {"per_page": 100, "page": page}
     response = session.get(search_url, headers=headers, params=params)
     if response.status_code != 200:
-        print(f"Failed to retrieve search results: {response.status_code}")
-        return False
+        raise RuntimeError(f"Failed to retrieve search results: {response.status_code}")
     search_results = response.json()
-    if 'items' in search_results:
-        for item in search_results['items']:
-            file_name = item['name']
+    if "items" in search_results:
+        for item in search_results["items"]:
+            file_name = item["name"]
             # Process only XML files
-            if file_name.lower().endswith('.xml'):
-                raw_url:str = item['html_url'].replace('github.com', 'raw.githubusercontent.com').replace('/blob/', '/')
+            if file_name.lower().endswith(".xml"):
+                raw_url: str = (
+                    item["html_url"].replace("github.com", "raw.githubusercontent.com").replace("/blob/", "/")
+                )
                 # check if the file exists in cache
                 if raw_url + "\n" in cached_urls:
                     continue
                 else:
-                    cached_urls.append(raw_url +"\n")
+                    cached_urls.append(raw_url + "\n")
                 # Fetch the file content
                 file_content = fetch_file_content(raw_url)
                 # Parse the XML
@@ -73,19 +68,19 @@ def fetch_and_process_results(page):
                 file_name_save = save / (hash_value + ".xml")
                 if not file_name_save.exists() and file_content and CheckValid(file_content):
                     print(f"{raw_url} is new")
-                    with open( file_name_save, "w") as f:
+                    with open(file_name_save, "w") as f:
                         f.write(file_content)
-    return len(search_results['items']) > 0  # Return True if there could be more results
+    return len(search_results["items"]) > 0  # Return True if there could be more results
 
 
 # Function to fetch file content
-def fetch_file_content(url:str):
+def fetch_file_content(url: str):
     response = session.get(url)
     if response.status_code == 200:
         return response.text
     else:
-        print(f"Failed to download {url}")
-        exit(1)
+        raise RuntimeError(f"Failed to download {url}")
+
 
 # Fetch all pages
 page = 1
@@ -95,15 +90,15 @@ while has_more:
     page += 1
 
 # update cache
-open(cache_file,"w").writelines(cached_urls)
+open(cache_file, "w").writelines(cached_urls)
 
 for file_path in save.glob("*.xml"):
     file_content = file_path.read_text()  # Read file content as a string
     # Run CheckValid to determine if the file is still valid
     if not CheckValid(file_content):
         # Prompt user for deletion
-        user_input = input(f"File '{file_path.name}' is no longer valid. Do you want to delete it? (y/n): ")
-        if user_input.lower() == 'y':
+        user_input = input(f"File '{file_path.name}' is no longer valid. Do you want to delete it? (y/N): ")
+        if user_input.lower() == "y":
             try:
                 file_path.unlink()  # Delete the file
                 print(f"Deleted file: {file_path.name}")

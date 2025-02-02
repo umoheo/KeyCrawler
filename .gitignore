@@ -1,5 +1,5 @@
 pyrightconfig.json
 __pycache__/*
 keys/*
-__pycache__/checkKB.cpython-312.pyc
 .env
+cache.txt

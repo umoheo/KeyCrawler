@@ -11,7 +11,6 @@ package-mode = false
 python = "^3.10"
 requests = "^2.32.3"
 cryptography = "^43.0.0"
-loguru = "^0.7.2"
 lxml = "^5.3.0"
 types-requests = "^2.32.0.20241016"
 lxml-stubs = "^0.5.1"
